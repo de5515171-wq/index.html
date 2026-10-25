@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Histograma de Cosecha - Camaronera</title>
-    <!-- Librería para gráficos compatible con web móvil -->
+    <!-- Librería Chart.js para gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
@@ -28,10 +28,44 @@
             font-size: 1.2rem;
             margin-bottom: 15px;
         }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        textarea {
+            width: 100%;
+            height: 90px;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.95rem;
+        }
+        button {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #0369a1;
+        }
         canvas {
             width: 100% !important;
             height: auto !important;
-            max-height: 300px;
+            max-height: 250px;
+            margin-top: 15px;
         }
         .stats {
             margin-top: 15px;
@@ -46,92 +80,110 @@
 <body>
 
     <div class="container">
-        <h2>Histograma de Cosecha (Camarón)</h2>
+        <h2>Control de Cosecha - Camaronera</h2>
+        
+        <div class="form-group">
+            <label for="inputPesos">Pega o escribe los pesos (separados por comas o espacios):</label>
+            <textarea id="inputPesos" placeholder="Ej: 8.2, 7.5, 9.1, 10.2, 6.8...">8.2, 8.5, 9.0, 9.1, 9.3, 9.5, 9.8, 10.1, 10.5, 11.0, 11.5, 12.2, 7.2, 8.1, 8.6, 9.2, 9.6, 10.0</textarea>
+        </div>
+        
+        <button onclick="actualizarHistograma()">Generar Histograma</button>
+
         <canvas id="histogramChart"></canvas>
+        
         <div class="stats" id="statsContainer">
-            <!-- Los datos calculados aparecerán aquí -->
+            <!-- Aquí saldrán los resultados -->
         </div>
     </div>
 
     <script>
-        // 1. Tus datos de campo (pesos en gramos de los camarones muestreados)
-        const pesosCamarones = [
-            5.2, 6.1, 6.8, 7.1, 7.5, 7.8, 8.0, 8.2, 8.5, 8.8,
-            9.0, 9.1, 9.3, 9.5, 9.8, 10.1, 10.5, 11.0, 11.5, 12.2,
-            6.5, 7.2, 8.1, 8.6, 9.2, 9.6, 10.0, 10.3, 11.1, 12.0
-        ];
+        let miGrafico = null;
 
-        // 2. Configuración de intervalos (bins)
-        const minPeso = 4.0;
-        const maxPeso = 14.0;
-        const amplitud = 1.5;
+        function actualizarHistograma() {
+            // 1. Capturar el texto y convertirlo en un arreglo de números (acepta comas, espacios o saltos de línea)
+            const texto = document.getElementById('inputPesos').value;
+            const pesosCamarones = texto
+                .split(/[\s,]+/)
+                .map(item => parseFloat(item.trim()))
+                .filter(item => !isNaN(item));
 
-        let bins = [];
-        for (let i = minPeso; i < maxPeso; i += amplitud) {
-            bins.push({ 
-                min: i, 
-                max: i + amplitud, 
-                count: 0, 
-                label: `${i.toFixed(1)} - ${(i + amplitud).toFixed(1)}g` 
+            if (pesosCamarones.length === 0) {
+                alert("Por favor ingresa al menos un valor numérico válido.");
+                return;
+            }
+
+            // 2. Definir rangos automáticos basados en los datos ingresados
+            const minPeso = Math.floor(Math.min(...pesosCamarones));
+            const maxPeso = Math.ceil(Math.max(...pesosCamarones));
+            const amplitud = 1.5; // Amplitud de cada barra (intervalo en gramos)
+
+            let bins = [];
+            for (let i = minPeso; i <= maxPeso; i += amplitud) {
+                bins.push({ 
+                    min: i, 
+                    max: i + amplitud, 
+                    count: 0, 
+                    label: `${i.toFixed(1)} - ${(i + amplitud).toFixed(1)}g` 
+                });
+            }
+
+            // Distribuir cada peso en su respectivo intervalo
+            pesosCamarones.forEach(peso => {
+                for (let bin of bins) {
+                    if (peso >= bin.min && peso < bin.max) {
+                        bin.count++;
+                        break;
+                    }
+                }
+            });
+
+            const labels = bins.map(b => b.label);
+            const dataCounts = bins.map(b => b.count);
+
+            // Calcular estadísticas clave
+            const suma = pesosCamarones.reduce((a, b) => a + b, 0);
+            const promedio = (suma / pesosCamarones.length).toFixed(2);
+
+            // Mostrar estadísticas en pantalla
+            document.getElementById('statsContainer').innerHTML = `
+                <b>Total Muestreado:</b> ${pesosCamarones.length} camarones<br>
+                <b>Peso Promedio:</b> ${promedio} g | <b>Mín:</b> ${Math.min(...pesosCamarones)}g | <b>Máx:</b> ${Math.max(...pesosCamarones)}g
+            `;
+
+            // 3. Dibujar o actualizar el gráfico dinámicamente
+            const ctx = document.getElementById('histogramChart').getContext('2d');
+            
+            if (miGrafico) {
+                miGrafico.destroy(); // Limpia el gráfico anterior para que no se encime
+            }
+
+            miGrafico = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Frecuencia',
+                        data: dataCounts,
+                        backgroundColor: 'rgba(31, 119, 180, 0.75)',
+                        borderColor: 'rgba(31, 119, 180, 1)',
+                        borderWidth: 1,
+                        barPercentage: 1.0,     // Barras juntas simulando histograma
+                        categoryPercentage: 1.0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { title: { display: true, text: 'Intervalos de Peso (g)' }, grid: { display: false } },
+                        y: { title: { display: true, text: 'Cantidad de Camarones' }, beginAtZero: true }
+                    }
+                }
             });
         }
 
-        // Distribuir los datos en los intervalos correspondientes
-        pesosCamarones.forEach(peso => {
-            for (let bin of bins) {
-                if (peso >= bin.min && peso < bin.max) {
-                    bin.count++;
-                    break;
-                }
-            }
-        });
-
-        const labels = bins.map(b => b.label);
-        const dataCounts = bins.map(b => b.count);
-
-        // Calcular promedio de la muestra
-        const suma = pesosCamarones.reduce((a, b) => a + b, 0);
-        const promedio = (suma / pesosCamarones.length).toFixed(2);
-
-        // Mostrar estadísticas en pantalla
-        document.getElementById('statsContainer').innerHTML = `
-            <b>Total Muestreado:</b> ${pesosCamarones.length} camarones<br>
-            <b>Peso Promedio:</b> ${promedio} g
-        `;
-
-        // 3. Renderizar el gráfico de barras (histograma)
-        const ctx = document.getElementById('histogramChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Frecuencia (Individuos)',
-                    data: dataCounts,
-                    backgroundColor: 'rgba(31, 119, 180, 0.75)',
-                    borderColor: 'rgba(31, 119, 180, 1)',
-                    borderWidth: 1,
-                    barPercentage: 1.0,     // Barras juntas simulando histograma continuo
-                    categoryPercentage: 1.0
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    x: { 
-                        title: { display: true, text: 'Intervalos de Peso (g)' },
-                        grid: { display: false }
-                    },
-                    y: { 
-                        title: { display: true, text: 'Número de Camarones' }, 
-                        beginAtZero: true 
-                    }
-                }
-            }
-        });
+        // Ejecutar al abrir la página por primera vez
+        window.onload = actualizarHistograma;
     </script>
 </body>
 </html>
